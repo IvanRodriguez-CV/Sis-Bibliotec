@@ -93,22 +93,23 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
 <body class="bg-light">
 
     <!-- Navbar igual que dashboard -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
         <div class="container">
             <a class="navbar-brand fw-bold d-flex align-items-center" href="dashboard.php">
-                📚 <span class="ms-2">Panel Admin</span>
+                ⚙️ <span class="ms-2">Panel Admin</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                 <ul class="navbar-nav align-items-center gap-2">
-                    <li class="nav-item"><a class="nav-link" href="dashboard.php">Inicio</a></li>
-                    <li class="nav-item"><a class="nav-link active fw-semibold" href="libros.php">Libros</a></li>
-                    <li class="nav-item"><a class="nav-link" href="autores.php">Autores</a></li>
-                    <li class="nav-item"><a class="nav-link" href="categorias.php">Categorías</a></li>
-                    <li class="nav-item"><a class="nav-link" href="prestamos.php">Préstamos</a></li>
-                    <li class="nav-item"><a class="nav-link" href="usuarios.php">Usuarios</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='dashboard.php'?'active fw-semibold':'text-white-50'; ?>" href="dashboard.php">Inicio</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='carreras.php'?'active fw-semibold':'text-white-50'; ?>" href="carreras.php">Carreras</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='libros.php'?'active fw-semibold':'text-white-50'; ?>" href="libros.php">Libros</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='autores.php'?'active fw-semibold':'text-white-50'; ?>" href="autores.php">Autores</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='categorias.php'?'active fw-semibold':'text-white-50'; ?>" href="categorias.php">Categorías</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='prestamos.php'?'active fw-semibold':'text-white-50'; ?>" href="prestamos.php">Préstamos</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='usuarios.php'?'active fw-semibold':'text-white-50'; ?>" href="usuarios.php">Usuarios</a></li>
                     <li class="nav-item">
                         <a class="btn btn-outline-light btn-sm ms-2 px-3 fw-bold" href="../public/login.php">Salir</a>
                     </li>
