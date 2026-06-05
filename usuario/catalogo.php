@@ -70,16 +70,18 @@ $busqueda = isset($_GET['buscar']) ? trim($_GET['buscar']) : '';
 $mensaje = $_SESSION['mensaje_catalogo'] ?? '';
 unset($_SESSION['mensaje_catalogo']);
 
-$sql = "SELECT l.*, c.nombre AS nombre_categoria, CONCAT(a.nombre, ' ', a.apellido) AS nombre_autor 
+$sql = "SELECT l.id_libro, l.id_categoria, l.id_autor, l.titulo, l.codigo, l.descripcion, l.existencias_totales, l.imagen, c.nombre AS nombre_categoria, GROUP_CONCAT(DISTINCT CONCAT(a.nombre, ' ', a.apellido) SEPARATOR ', ') AS nombre_autor 
         FROM Libro l
         INNER JOIN Categoria c ON l.id_categoria = c.id_categoria
         INNER JOIN Autores a ON l.id_autor = a.id_autor";
 
 if (!empty($busqueda)) {
     $sql .= " WHERE l.titulo LIKE ? OR l.codigo LIKE ? OR CONCAT(a.nombre, ' ', a.apellido) LIKE ?";
+    $sql .= " GROUP BY l.id_libro";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(["%$busqueda%", "%$busqueda%", "%$busqueda%"]);
 } else {
+    $sql .= " GROUP BY l.id_libro";
     $stmt = $pdo->query($sql);
 }
 $libros = $stmt->fetchAll();
@@ -231,7 +233,7 @@ function obtenerCamposAdicionales(array $libro): array {
                 <div class="col">
                     <div class="card h-100 shadow-sm border-0">
                         <?php
-                        $imagenLibro = obtenerCampoImagen($l);
+                        $imagenLibro = !empty($l['imagen']) ? $l['imagen'] : obtenerCampoImagen($l);
                         $imagenUrl = $imagenLibro ? construirUrlImagen($imagenLibro) : '';
 
                         if ($imagenUrl === '') {
