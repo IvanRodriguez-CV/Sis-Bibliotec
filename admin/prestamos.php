@@ -8,7 +8,21 @@ if (!isset($_SESSION['id_usuario']) || $_SESSION['tipo_usuario'] !== 'admin') {
     exit;
 }
 
-// Procesar actualización de estado o retorno físico del libro
+// Procesar eliminación o actualización de préstamo
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['eliminar_prestamo'])) {
+    $id_p = intval($_POST['id_prestamo']);
+
+    $pdo->beginTransaction();
+    $stmtDel = $pdo->prepare("DELETE FROM Prestamo WHERE id_prestamo = ?");
+    $stmtDel->execute([$id_p]);
+
+    if ($stmtDel->rowCount() > 0) {
+        $pdo->commit();
+    } else {
+        $pdo->rollBack();
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_estado'])) {
     $id_p = intval($_POST['id_prestamo']);
     $nuevo_estado = $_POST['estado_prestamo'];
@@ -184,6 +198,7 @@ if (!empty($prestamos)) {
                                                         <option value="Perdido" <?php if($p['estado_prestamo']=='Perdido') echo 'selected'; ?>>Perdido</option>
                                                     </select>
                                                     <button type="submit" name="actualizar_estado" class="btn btn-sm btn-primary">Guardar</button>
+                                                    <button type="submit" name="eliminar_prestamo" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este préstamo?');">Eliminar</button>
                                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="this.closest('details').removeAttribute('open')">Cerrar</button>
                                                 </div>
                                             </form>

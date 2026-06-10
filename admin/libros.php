@@ -8,12 +8,33 @@ if (!isset($_SESSION['id_usuario']) || $_SESSION['tipo_usuario'] !== 'admin') {
     exit;
 }
 
+// Asegurar que exista la tabla de relación entre libros y géneros
+try {
+    $stmt = $pdo->prepare("SHOW TABLES LIKE ?");
+    $stmt->execute(['Libro_Genero']);
+    if (!$stmt->fetchColumn()) {
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS Libro_Genero (
+                id_libro INT NOT NULL,
+                id_genero INT NOT NULL,
+                PRIMARY KEY (id_libro, id_genero),
+                INDEX idx_libro (id_libro),
+                INDEX idx_genero (id_genero)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    }
+} catch (PDOException $e) {
+    // Si no se puede crear la tabla, continuar sin bloquear la carga inicial.
+}
+
 // Crear libro
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
     $id_categoria_arr = isset($_POST['id_categoria']) ? (array)$_POST['id_categoria'] : [];
-    $id_categoria = implode(',', array_map('intval', $id_categoria_arr));
+    $id_categoria = isset($id_categoria_arr[0]) ? intval($id_categoria_arr[0]) : 0;
     $autor_ids = isset($_POST['id_autor']) ? (array)$_POST['id_autor'] : [];
     $autor_ids = array_filter(array_map('intval', $autor_ids));
+    $genero_ids = isset($_POST['id_genero']) ? (array)$_POST['id_genero'] : [];
+    $genero_ids = array_filter(array_map('intval', $genero_ids));
     $codigo = trim($_POST['codigo']);
     $titulo = trim($_POST['titulo']);
     $editorial = trim($_POST['editorial']);
@@ -37,15 +58,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
         }
     }
 
-    if (!empty($codigo) && !empty($titulo)) {
-        // Insert into Libro without id_autor; authors stored in Libro_Autor
-        $stmt = $pdo->prepare("INSERT INTO Libro (id_categoria, codigo, titulo, editorial, descripcion, imagen, anio_publicacion, existencias_totales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$id_categoria, $codigo, $titulo, $editorial, $descripcion, $imagen, $anio, $existencias]);
+    if (!empty($codigo) && !empty($titulo) && $id_categoria > 0) {
+        // Ensure codigo is unique to avoid integrity constraint violation
+        $baseCodigo = $codigo;
+        $suffix = 0;
+        $codigoUnique = $baseCodigo;
+        $check = $pdo->prepare("SELECT COUNT(*) FROM Libro WHERE codigo = ?");
+        while (true) {
+            $check->execute([$codigoUnique]);
+            if ($check->fetchColumn() == 0) break;
+            $suffix++;
+            $codigoUnique = $baseCodigo . '_' . $suffix;
+        }
+
+        // Insert into Libro; genres stored in Libro_Genero and authors in Libro_Autor
+        $stmt = $pdo->prepare("INSERT INTO Libro (id_categoria, codigo, titulo, editorial, imagen, anio_publicacion, existencias_totales) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$id_categoria, $codigoUnique, $titulo, $editorial, $imagen, $anio, $existencias]);
         $newId = $pdo->lastInsertId();
         if (!empty($autor_ids)) {
             $stmt2 = $pdo->prepare("INSERT INTO Libro_Autor (id_libro, id_autor) VALUES (?, ?)");
             foreach ($autor_ids as $sel_autor) {
                 $stmt2->execute([$newId, $sel_autor]);
+            }
+        }
+        if (!empty($genero_ids)) {
+            $stmt3 = $pdo->prepare("INSERT INTO Libro_Genero (id_libro, id_genero) VALUES (?, ?)");
+            foreach ($genero_ids as $sel_genero) {
+                $stmt3->execute([$newId, $sel_genero]);
             }
         }
     }
@@ -55,9 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar'])) {
     $id = intval($_POST['id_libro']);
     $id_categoria_arr = isset($_POST['id_categoria']) ? (array)$_POST['id_categoria'] : [];
-    $id_categoria = implode(',', array_map('intval', $id_categoria_arr));
+    $id_categoria = isset($id_categoria_arr[0]) ? intval($id_categoria_arr[0]) : 0;
     $autor_ids = isset($_POST['id_autor']) ? (array)$_POST['id_autor'] : [];
     $autor_ids = array_filter(array_map('intval', $autor_ids));
+    $genero_ids = isset($_POST['id_genero']) ? (array)$_POST['id_genero'] : [];
+    $genero_ids = array_filter(array_map('intval', $genero_ids));
     $codigo = trim($_POST['codigo']);
     $titulo = trim($_POST['titulo']);
     $editorial = trim($_POST['editorial']);
@@ -80,16 +121,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar'])) {
         }
     }
 
-    // Update Libro (no id_autor column)
-    $stmt = $pdo->prepare("UPDATE Libro SET id_categoria = ?, codigo = ?, titulo = ?, editorial = ?, descripcion = ?, imagen = ?, anio_publicacion = ?, existencias_totales = ? WHERE id_libro = ?");
-    $stmt->execute([$id_categoria, $codigo, $titulo, $editorial, $descripcion, $imagen, $anio, $existencias, $id]);
-    // Update libro_autor: remove old relations and insert the selected authors
-    $del = $pdo->prepare("DELETE FROM Libro_Autor WHERE id_libro = ?");
-    $del->execute([$id]);
-    if (!empty($autor_ids)) {
-        $ins = $pdo->prepare("INSERT INTO Libro_Autor (id_libro, id_autor) VALUES (?, ?)");
-        foreach ($autor_ids as $sel_autor) {
-            $ins->execute([$id, $sel_autor]);
+    // Update Libro and refresh relations
+    if (!empty($codigo) && !empty($titulo) && $id_categoria > 0) {
+        $stmt = $pdo->prepare("UPDATE Libro SET id_categoria = ?, codigo = ?, titulo = ?, editorial = ?, imagen = ?, anio_publicacion = ?, existencias_totales = ? WHERE id_libro = ?");
+        $stmt->execute([$id_categoria, $codigo, $titulo, $editorial, $imagen, $anio, $existencias, $id]);
+
+        $del = $pdo->prepare("DELETE FROM Libro_Autor WHERE id_libro = ?");
+        $del->execute([$id]);
+        if (!empty($autor_ids)) {
+            $ins = $pdo->prepare("INSERT INTO Libro_Autor (id_libro, id_autor) VALUES (?, ?)");
+            foreach ($autor_ids as $sel_autor) {
+                $ins->execute([$id, $sel_autor]);
+            }
+        }
+
+        $delGenero = $pdo->prepare("DELETE FROM Libro_Genero WHERE id_libro = ?");
+        $delGenero->execute([$id]);
+        if (!empty($genero_ids)) {
+            $insGenero = $pdo->prepare("INSERT INTO Libro_Genero (id_libro, id_genero) VALUES (?, ?)");
+            foreach ($genero_ids as $sel_genero) {
+                $insGenero->execute([$id, $sel_genero]);
+            }
         }
     }
 }
@@ -107,14 +159,21 @@ if (isset($_GET['eliminar'])) {
 }
 $libros = $pdo->query("SELECT L.*, 
     GROUP_CONCAT(DISTINCT CONCAT(A.nombre,' ',A.apellido) SEPARATOR ', ') AS autores, 
-    GROUP_CONCAT(DISTINCT A.id_autor) AS autores_ids
+    GROUP_CONCAT(DISTINCT A.id_autor) AS autores_ids,
+    GROUP_CONCAT(DISTINCT LG.id_genero) AS generos_ids
     FROM Libro L
     LEFT JOIN Libro_Autor LA ON LA.id_libro = L.id_libro
     LEFT JOIN Autores A ON A.id_autor = LA.id_autor
+    LEFT JOIN Libro_Genero LG ON LG.id_libro = L.id_libro
     GROUP BY L.id_libro
     ORDER BY L.id_libro DESC")->fetchAll();
 $categorias = $pdo->query("SELECT * FROM Categoria ORDER BY nombre ASC")->fetchAll();
 $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
+try {
+    $generos = $pdo->query("SELECT G.*, GROUP_CONCAT(CG.id_categoria) AS categorias FROM Genero G LEFT JOIN Categoria_Genero CG ON CG.id_genero = G.id_genero GROUP BY G.id_genero ORDER BY G.nombre ASC")->fetchAll();
+} catch (PDOException $e) {
+    $generos = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -186,6 +245,23 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
                             </div>
                         </div>
                         <small class="text-muted">Selecciona una o varias categorías.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Géneros</label>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="generoDropdown" data-bs-toggle="dropdown" aria-expanded="false" disabled>
+                                Seleccionar géneros
+                            </button>
+                            <div class="dropdown-menu w-100 p-3" style="max-height:250px; overflow-y:auto;" aria-labelledby="generoDropdown" id="generoMenu">
+                                <?php foreach ($generos as $gen): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input genero-check" type="checkbox" name="id_genero[]" value="<?php echo $gen['id_genero']; ?>" id="gen_<?php echo $gen['id_genero']; ?>" data-categorias="<?php echo $gen['categorias']; ?>">
+                                        <label class="form-check-label" for="gen_<?php echo $gen['id_genero']; ?>"><?php echo htmlspecialchars($gen['nombre']); ?></label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <small class="text-muted">Selecciona uno o varios géneros relacionados a las categorías elegidas.</small>
                     </div>
                     <div class="col-md-6">
                         <label for="id_autor" class="form-label">Autores</label>
@@ -267,8 +343,8 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
                                     ?></td>
                                     <td><?php echo $l['existencias_totales']; ?></td>
                                     <td>
-                                        <button class="btn btn-sm btn-warning" 
-                                            onclick="cargarDatos(
+                                        <button type="button" class="btn btn-sm btn-warning" 
+                                            onclick='cargarDatos(
                                                 <?php echo $l['id_libro']; ?>, 
                                                 <?php echo json_encode($l['id_categoria']); ?>, 
                                                 <?php echo json_encode($l['autores_ids'] ?? ''); ?>, 
@@ -278,8 +354,9 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
                                                 <?php echo json_encode($l['descripcion'] ?? ''); ?>,
                                                 <?php echo $l['anio_publicacion']; ?>, 
                                                 <?php echo $l['existencias_totales']; ?>,
-                                                <?php echo json_encode($l['imagen'] ?? ''); ?>
-                                            )">Editar</button>
+                                                <?php echo json_encode($l['imagen'] ?? ''); ?>,
+                                                <?php echo json_encode($l['generos_ids'] ?? ''); ?>
+                                            )'>Editar</button>
                                         <a href="libros.php?eliminar=<?php echo $l['id_libro']; ?>" 
                                            class="btn btn-sm btn-danger" 
                                            onclick="return confirm('¿Eliminar libro?')">Eliminar</a>
@@ -294,7 +371,94 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
     </main>
 
     <script>
-        function cargarDatos(id, cat, aut, cod, tit, edit, descripcion, anio, stock, img) {
+        function updateCategoriaButtonText() {
+            const selected = Array.from(document.querySelectorAll('.categoria-check:checked')).map(input => {
+                const label = input.nextElementSibling;
+                return label ? label.textContent.trim() : '';
+            }).filter(Boolean);
+            const button = document.getElementById('categoriaDropdown');
+            if (!button) return;
+            if (selected.length === 0) {
+                button.textContent = 'Seleccionar categorías';
+            } else if (selected.length === 1) {
+                button.textContent = selected[0];
+            } else {
+                button.textContent = 'Seleccionadas: ' + selected.length;
+            }
+        }
+
+        const generosData = <?php echo json_encode($generos); ?>;
+
+        function updateGeneroButtonText() {
+            const selected = Array.from(document.querySelectorAll('.genero-check:checked')).map(input => {
+                const label = input.nextElementSibling;
+                return label ? label.textContent.trim() : '';
+            }).filter(Boolean);
+            const button = document.getElementById('generoDropdown');
+            if (!button) return;
+            if (selected.length === 0) {
+                button.textContent = 'Seleccionar géneros';
+            } else if (selected.length === 1) {
+                button.textContent = selected[0];
+            } else {
+                button.textContent = 'Seleccionados: ' + selected.length;
+            }
+        }
+
+        function updateGeneroOptions(selectedGenero = []) {
+            const selectedCatIds = Array.from(document.querySelectorAll('.categoria-check:checked')).map(input => input.value);
+            const generoChecks = document.querySelectorAll('.genero-check');
+            const generoDropdown = document.getElementById('generoDropdown');
+            const selectedGeneroIds = (Array.isArray(selectedGenero) ? selectedGenero : selectedGenero.toString().split(',').map(item => item.trim())).filter(Boolean);
+
+            if (selectedCatIds.length === 0) {
+                generoChecks.forEach(input => {
+                    input.checked = false;
+                    input.disabled = true;
+                    input.closest('.form-check').style.display = 'none';
+                });
+                generoDropdown.disabled = true;
+                generoDropdown.textContent = 'Seleccionar géneros';
+                return;
+            }
+
+            generoDropdown.disabled = false;
+            let anyVisible = false;
+            generoChecks.forEach(input => {
+                const categorias = input.dataset.categorias ? input.dataset.categorias.toString().split(',').map(item => item.trim()) : [];
+                const match = categorias.some(catId => selectedCatIds.includes(catId));
+                input.closest('.form-check').style.display = match ? 'block' : 'none';
+                input.disabled = !match;
+                if (!match) {
+                    input.checked = false;
+                }
+                if (match && selectedGeneroIds.includes(input.value)) {
+                    input.checked = true;
+                }
+                if (match) {
+                    anyVisible = true;
+                }
+            });
+
+            if (!anyVisible) {
+                generoDropdown.textContent = 'No hay géneros para la categoría seleccionada';
+            } else {
+                updateGeneroButtonText();
+            }
+        }
+
+        document.querySelectorAll('.categoria-check').forEach(input => {
+            input.addEventListener('change', () => {
+                updateCategoriaButtonText();
+                updateGeneroOptions();
+            });
+        });
+
+        document.querySelectorAll('.genero-check').forEach(input => {
+            input.addEventListener('change', updateGeneroButtonText);
+        });
+
+        function cargarDatos(id, cat, aut, cod, tit, edit, descripcion, anio, stock, img, gen) {
             document.getElementById('id_libro').value = id;
             const categoryInputs = document.querySelectorAll('input[name="id_categoria[]"]');
             categoryInputs.forEach(input => input.checked = false);
@@ -304,6 +468,8 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
                     input.checked = true;
                 }
             });
+            updateCategoriaButtonText();
+            updateGeneroOptions(gen);
             const autorSelect = document.getElementById('id_autor');
             const selectedAuths = aut ? aut.toString().split(',').map(item => item.trim()) : [];
             Array.from(autorSelect.options).forEach(option => {
@@ -340,6 +506,9 @@ $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
                 reader.readAsDataURL(file);
             }
         });
+
+        // Inicializa el texto del botón de categorías
+        updateCategoriaButtonText();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

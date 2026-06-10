@@ -21,36 +21,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['solicitar_libro'])) {
         try {
             $pdo->beginTransaction();
 
-            $stmtLibro = $pdo->prepare("SELECT existencias_totales FROM Libro WHERE id_libro = ? FOR UPDATE");
-            $stmtLibro->execute([$id_libro_solicitado]);
-            $libroInfo = $stmtLibro->fetch();
+            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM Prestamo WHERE id_libro = ? AND id_usuario = ? AND estado_prestamo IN ('Activo','Vencido')");
+            $stmtCheck->execute([$id_libro_solicitado, $id_usuario]);
+            $solicitudesActivas = (int) $stmtCheck->fetchColumn();
 
-            if ($libroInfo && isset($libroInfo['existencias_totales']) && $libroInfo['existencias_totales'] > 0) {
-                $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM Prestamo WHERE id_libro = ? AND id_usuario = ? AND estado_prestamo IN ('Activo','Vencido')");
-                $stmtCheck->execute([$id_libro_solicitado, $id_usuario]);
-                $solicitudesActivas = (int) $stmtCheck->fetchColumn();
+            if ($solicitudesActivas > 0) {
+                $mensaje = 'Ya tienes un préstamo activo o vencido para este libro.';
+                $pdo->rollBack();
+            } else {
+                $stmtLibro = $pdo->prepare("SELECT existencias_totales FROM Libro WHERE id_libro = ? FOR UPDATE");
+                $stmtLibro->execute([$id_libro_solicitado]);
+                $libroDatos = $stmtLibro->fetch(PDO::FETCH_ASSOC);
 
-                if ($solicitudesActivas > 0) {
+                if (!$libroDatos || $libroDatos['existencias_totales'] <= 0) {
                     $pdo->rollBack();
-                    $mensaje = 'Ya tienes un préstamo activo o vencido para este libro.';
+                    $mensaje = 'No hay existencias disponibles para este libro.';
                 } else {
-                    $stmtPrestamo = $pdo->prepare("INSERT INTO Prestamo (id_libro, id_usuario, fecha_prestamo, fecha_entrega, estado_prestamo) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY), 'Activo')");
-                    $stmtPrestamo->execute([$id_libro_solicitado, $id_usuario]);
-
-                    $stmtUpdate = $pdo->prepare("UPDATE Libro SET existencias_totales = existencias_totales - 1 WHERE id_libro = ?");
+                    $stmtUpdate = $pdo->prepare("UPDATE Libro SET existencias_totales = existencias_totales - 1 WHERE id_libro = ? AND existencias_totales > 0");
                     $stmtUpdate->execute([$id_libro_solicitado]);
 
-                    $pdo->commit();
-                    $mensaje = 'Préstamo solicitado correctamente.';
+                    if ($stmtUpdate->rowCount() > 0) {
+                        $stmtPrestamo = $pdo->prepare("INSERT INTO Prestamo (id_libro, id_usuario, fecha_prestamo, fecha_entrega, estado_prestamo) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY), 'Activo')");
+                        $stmtPrestamo->execute([$id_libro_solicitado, $id_usuario]);
+
+                        if ($stmtPrestamo->rowCount() > 0) {
+                            $pdo->commit();
+                            $mensaje = 'Préstamo solicitado correctamente.';
+                        } else {
+                            $pdo->rollBack();
+                            $mensaje = 'No se pudo registrar el préstamo. Intente de nuevo.';
+                        }
+                    } else {
+                        $pdo->rollBack();
+                        $mensaje = 'No hay existencias disponibles para este libro.';
+                    }
                 }
-            } else {
-                $pdo->rollBack();
-                $mensaje = 'No hay existencias disponibles para este libro.';
             }
         } catch (Exception $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            error_log('Error al solicitar préstamo: ' . $e->getMessage());
             $mensaje = 'No se pudo procesar la solicitud. Intente de nuevo.';
         }
     } else {
@@ -70,19 +81,105 @@ $busqueda = isset($_GET['buscar']) ? trim($_GET['buscar']) : '';
 $mensaje = $_SESSION['mensaje_catalogo'] ?? '';
 unset($_SESSION['mensaje_catalogo']);
 
-$sql = "SELECT l.id_libro, l.id_categoria, l.id_autor, l.titulo, l.codigo, l.descripcion, l.existencias_totales, l.imagen, c.nombre AS nombre_categoria, GROUP_CONCAT(DISTINCT CONCAT(a.nombre, ' ', a.apellido) SEPARATOR ', ') AS nombre_autor 
-        FROM Libro l
-        INNER JOIN Categoria c ON l.id_categoria = c.id_categoria
-        INNER JOIN Autores a ON l.id_autor = a.id_autor";
+$libroColumnas = $pdo->query("SHOW COLUMNS FROM Libro")->fetchAll(PDO::FETCH_COLUMN);
+$idCategoriaCol = null;
+$idAutorCol = null;
+$descripcionCol = null;
+$imagenCol = null;
+foreach ($libroColumnas as $columna) {
+    $columnaLower = strtolower($columna);
+    if ($idCategoriaCol === null && str_contains($columnaLower, 'categoria')) {
+        $idCategoriaCol = $columna;
+    }
+    if ($idAutorCol === null && str_contains($columnaLower, 'autor')) {
+        $idAutorCol = $columna;
+    }
+    if ($descripcionCol === null && preg_match('/descripcion|resumen|sinopsis|detalle/i', $columnaLower)) {
+        $descripcionCol = $columna;
+    }
+    if ($imagenCol === null && preg_match('/imagen|foto|portada|ruta_imagen|ruta_portada/i', $columnaLower)) {
+        $imagenCol = $columna;
+    }
+}
+if ($idCategoriaCol === null) {
+    $idCategoriaCol = 'id_categoria';
+}
+
+$useJoinTableAutores = false;
+$joinAutorSql = '';
+if ($idAutorCol !== null) {
+    $joinAutorSql = "LEFT JOIN Autores a ON l.{$idAutorCol} = a.id_autor";
+} else {
+    try {
+        $pdo->query("SELECT 1 FROM Libro_Autor LIMIT 1");
+        $useJoinTableAutores = true;
+    } catch (Exception $e) {
+        $useJoinTableAutores = false;
+    }
+
+    if ($useJoinTableAutores) {
+        $joinAutorSql = "LEFT JOIN Libro_Autor la ON la.id_libro = l.id_libro
+                         LEFT JOIN Autores a ON la.id_autor = a.id_autor";
+    }
+}
+
+$selectedColumns = [
+    "l.id_libro",
+    "l.{$idCategoriaCol} AS id_categoria",
+    "l.titulo",
+    "l.codigo",
+    "l.existencias_totales",
+    "c.nombre AS nombre_categoria",
+];
+
+$groupByColumns = [
+    "l.id_libro",
+    "l.{$idCategoriaCol}",
+    "l.titulo",
+    "l.codigo",
+    "l.existencias_totales",
+    "c.nombre",
+];
+
+if ($joinAutorSql !== '') {
+    $selectedColumns[] = "GROUP_CONCAT(DISTINCT CONCAT(a.nombre, ' ', a.apellido) SEPARATOR ', ') AS nombre_autor";
+}
+
+if ($descripcionCol !== null) {
+    $selectedColumns[] = "l.{$descripcionCol} AS descripcion";
+    $groupByColumns[] = "l.{$descripcionCol}";
+}
+
+if ($imagenCol !== null) {
+    $selectedColumns[] = "l.{$imagenCol} AS imagen";
+    $groupByColumns[] = "l.{$imagenCol}";
+} else {
+    $selectedColumns[] = "'' AS imagen";
+}
+
+$sql = "SELECT " . implode(', ', $selectedColumns) . " FROM Libro l
+        INNER JOIN Categoria c ON l.{$idCategoriaCol} = c.id_categoria";
+if ($joinAutorSql !== '') {
+    $sql .= "\n        " . $joinAutorSql;
+}
+
+$groupBySql = " GROUP BY " . implode(', ', $groupByColumns);
 
 if (!empty($busqueda)) {
-    $sql .= " WHERE l.titulo LIKE ? OR l.codigo LIKE ? OR CONCAT(a.nombre, ' ', a.apellido) LIKE ?";
-    $sql .= " GROUP BY l.id_libro";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute(["%$busqueda%", "%$busqueda%", "%$busqueda%"]);
+    $whereConditions = [
+        "l.titulo LIKE ?",
+        "l.codigo LIKE ?",
+    ];
+    $params = ["%$busqueda%", "%$busqueda%"];
+    if ($joinAutorSql !== '') {
+        $whereConditions[] = "CONCAT(a.nombre, ' ', a.apellido) LIKE ?";
+        $params[] = "%$busqueda%";
+    }
+    $sql .= " WHERE " . implode(' OR ', $whereConditions);
+    $stmt = $pdo->prepare($sql . $groupBySql);
+    $stmt->execute($params);
 } else {
-    $sql .= " GROUP BY l.id_libro";
-    $stmt = $pdo->query($sql);
+    $stmt = $pdo->query($sql . $groupBySql);
 }
 $libros = $stmt->fetchAll();
 
@@ -177,7 +274,7 @@ function obtenerCamposAdicionales(array $libro): array {
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
   <div class="container">
     <!-- Logo / título -->
-    <a class="navbar-brand fw-bold d-flex align-items-center" href="catalogo.php">
+    <a class="navbar-brand fw-bold d-flex align-items-center" href="./catalogo.php">
       📚 <span class="ms-2">Biblioteca</span>
     </a>
 
@@ -190,13 +287,13 @@ function obtenerCamposAdicionales(array $libro): array {
     <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
       <ul class="navbar-nav align-items-center gap-2">
         <li class="nav-item">
-          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'catalogo.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="catalogo.php">Catálogo</a>
+          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'catalogo.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="./catalogo.php">Catálogo</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'mis_prestamos.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="mis_prestamos.php">Mis Préstamos</a>
+          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'mis_prestamos.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="./mis_prestamos.php">Mis Préstamos</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'perfil.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="perfil.php">Mi Perfil</a>
+          <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'perfil.php' ? 'active fw-semibold' : 'text-white-50'; ?>" href="./perfil.php">Mi Perfil</a>
         </li>
         <li class="nav-item">
           <a class="btn btn-outline-light btn-sm ms-2 px-3 fw-bold" href="../public/logout.php">Salir</a>

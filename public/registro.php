@@ -129,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registro'])) {
                                     <select id="tipo_usuario" name="tipo_usuario" class="form-select" required>
                                         <option value="Estudiante">Estudiante</option>
                                         <option value="Docente">Docente</option>
+                                      
                                     
                                     </select>
                                 </div>

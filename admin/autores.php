@@ -12,11 +12,13 @@ if (!isset($_SESSION['id_usuario']) || $_SESSION['tipo_usuario'] !== 'admin') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
     $nombre = trim($_POST['nombre']);
     $apellido = trim($_POST['apellido']);
-    $anio = intval($_POST['anio_nacimiento']);
-    $genero = trim($_POST['genero']);
+    $codigo = trim($_POST['codigo_autor'] ?? '');
+    $generos = trim($_POST['genero_frecuente'] ?? '');
+    // Asegurar que año sea entero o NULL para columnas YEAR/INT
+    $anio = (isset($_POST['anio_nacimiento']) && $_POST['anio_nacimiento'] !== '') ? intval($_POST['anio_nacimiento']) : null;
     if (!empty($nombre) && !empty($apellido)) {
-        $stmt = $pdo->prepare("INSERT INTO Autores (nombre, apellido, anio_nacimiento, genero) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$nombre, $apellido, $anio, $genero]);
+        $stmt = $pdo->prepare("INSERT INTO Autores (nombre, apellido, anio_nacimiento, codigo_autor, genero_frecuente) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$nombre, $apellido, $anio, $codigo, $generos]);
     }
 }
 
@@ -25,10 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar'])) {
     $id = intval($_POST['id_autor']);
     $nombre = trim($_POST['nombre']);
     $apellido = trim($_POST['apellido']);
-    $anio = intval($_POST['anio_nacimiento']);
-    $genero = trim($_POST['genero']);
-    $stmt = $pdo->prepare("UPDATE Autores SET nombre = ?, apellido = ?, anio_nacimiento = ?, genero = ? WHERE id_autor = ?");
-    $stmt->execute([$nombre, $apellido, $anio, $genero, $id]);
+    $codigo = trim($_POST['codigo_autor'] ?? '');
+    $generos = trim($_POST['genero_frecuente'] ?? '');
+    $anio = isset($_POST['anio_nacimiento']) && $_POST['anio_nacimiento'] !== '' ? $_POST['anio_nacimiento'] : null;
+    $stmt = $pdo->prepare("UPDATE Autores SET nombre = ?, apellido = ?, anio_nacimiento = ?, codigo_autor = ?, genero_frecuente = ? WHERE id_autor = ?");
+    $stmt->execute([$nombre, $apellido, $anio, $codigo, $generos, $id]);
 }
 
 // Eliminar autor
@@ -100,8 +103,12 @@ $autores = $pdo->query("SELECT * FROM Autores ORDER BY id_autor DESC")->fetchAll
                         <input type="number" id="anio_nacimiento" name="anio_nacimiento" class="form-control">
                     </div>
                     <div class="col-md-6">
-                        <label for="genero" class="form-label">Género Literario Frecuente</label>
-                        <input type="text" id="genero" name="genero" class="form-control">
+                        <label for="codigo_autor" class="form-label">Código Autor</label>
+                        <input type="text" id="codigo_autor" name="codigo_autor" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="genero_frecuente" class="form-label">Géneros Frecuentes</label>
+                        <input type="text" id="genero_frecuente" name="genero_frecuente" class="form-control" placeholder="Ej: Ficción, Drama">
                     </div>
                     <div class="col-12">
                         <button type="submit" name="crear" id="btn-submit" class="btn btn-primary w-100">Registrar Autor</button>
@@ -119,9 +126,10 @@ $autores = $pdo->query("SELECT * FROM Autores ORDER BY id_autor DESC")->fetchAll
                         <thead class="table-dark">
                             <tr>
                                 <th>ID</th>
+                                <th>Código</th>
                                 <th>Nombre Completo</th>
                                 <th>Año Nacimiento</th>
-                                <th>Género</th>
+                                <th>Géneros</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -129,11 +137,12 @@ $autores = $pdo->query("SELECT * FROM Autores ORDER BY id_autor DESC")->fetchAll
                             <?php foreach ($autores as $a): ?>
                                 <tr>
                                     <td><?php echo $a['id_autor']; ?></td>
+                                    <td><?php echo htmlspecialchars($a['codigo_autor'] ?? 'N/A'); ?></td>
                                     <td><?php echo htmlspecialchars($a['nombre'] . ' ' . $a['apellido']); ?></td>
                                     <td><?php echo $a['anio_nacimiento'] ?? 'N/A'; ?></td>
-                                    <td><?php echo htmlspecialchars($a['genero'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($a['genero_frecuente'] ?? 'N/A'); ?></td>
                                     <td>
-                                        <button class="btn btn-sm btn-warning" onclick="cargarDatos(<?php echo $a['id_autor']; ?>, '<?php echo addslashes($a['nombre']); ?>', '<?php echo addslashes($a['apellido']); ?>', '<?php echo $a['anio_nacimiento']; ?>', '<?php echo addslashes($a['genero']); ?>')">Editar</button>
+                                        <button class="btn btn-sm btn-warning" onclick='cargarDatos(<?php echo $a['id_autor']; ?>, <?php echo json_encode($a['nombre']); ?>, <?php echo json_encode($a['apellido']); ?>, <?php echo json_encode($a['anio_nacimiento'] ?? ''); ?>, <?php echo json_encode($a['codigo_autor'] ?? ''); ?>, <?php echo json_encode($a['genero_frecuente'] ?? ''); ?>);'>Editar</button>
                                         <a href="autores.php?eliminar=<?php echo $a['id_autor']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este autor?')">Eliminar</a>
                                     </td>
                                 </tr>
@@ -146,12 +155,13 @@ $autores = $pdo->query("SELECT * FROM Autores ORDER BY id_autor DESC")->fetchAll
     </main>
 
     <script>
-        function cargarDatos(id, nombre, apellido, anio, genero) {
+        function cargarDatos(id, nombre, apellido, anio, codigo, generos) {
             document.getElementById('id_autor').value = id;
             document.getElementById('nombre').value = nombre;
             document.getElementById('apellido').value = apellido;
             document.getElementById('anio_nacimiento').value = anio;
-            document.getElementById('genero').value = genero;
+            document.getElementById('codigo_autor').value = codigo;
+            document.getElementById('genero_frecuente').value = generos;
             document.getElementById('btn-submit').name = 'editar';
             document.getElementById('btn-submit').textContent = 'Guardar Cambios';
         }

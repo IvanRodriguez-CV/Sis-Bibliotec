@@ -8,13 +8,59 @@ if (!isset($_SESSION['id_usuario']) || $_SESSION['tipo_usuario'] !== 'admin') {
     exit;
 }
 
+function obtenerIdsGenerosDesdeTexto($pdo, $texto) {
+    $ids = [];
+    $texto = trim($texto);
+    if ($texto === '') {
+        return $ids;
+    }
+
+    $generos = array_filter(array_map('trim', explode(',', $texto)));
+    $stmtSelect = $pdo->prepare("SELECT id_genero FROM Genero WHERE LOWER(nombre) = LOWER(?)");
+    $stmtInsert = $pdo->prepare("INSERT INTO Genero (nombre) VALUES (?)");
+
+    foreach ($generos as $generoNuevo) {
+        if ($generoNuevo === '') {
+            continue;
+        }
+        $stmtSelect->execute([$generoNuevo]);
+        $row = $stmtSelect->fetch();
+        if ($row) {
+            $ids[] = $row['id_genero'];
+        } else {
+            $stmtInsert->execute([$generoNuevo]);
+            $ids[] = $pdo->lastInsertId();
+        }
+    }
+
+    return $ids;
+}
+
 // Registrar nueva categoría
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
     $nombre = trim($_POST['nombre']);
-    $generos = trim($_POST['generos']);
-    if (!empty($nombre) && !empty($generos)) {
-        $stmt = $pdo->prepare("INSERT INTO Categoria (nombre, generos) VALUES (?, ?)");
-        $stmt->execute([$nombre, $generos]);
+    $generosSeleccionados = isset($_POST['generos']) ? array_map('intval', $_POST['generos']) : [];
+    $nuevosGenerosTexto = trim($_POST['nuevos_generos'] ?? '');
+
+    if ($nuevosGenerosTexto !== '') {
+        $nuevosIds = obtenerIdsGenerosDesdeTexto($pdo, $nuevosGenerosTexto);
+        $generosSeleccionados = array_unique(array_merge($generosSeleccionados, $nuevosIds), SORT_NUMERIC);
+    }
+
+    if (!empty($nombre)) {
+        $stmt = $pdo->prepare("INSERT INTO Categoria (nombre) VALUES (?)");
+        $stmt->execute([$nombre]);
+        $idCategoria = $pdo->lastInsertId();
+
+        if (!empty($generosSeleccionados)) {
+            $stmtRel = $pdo->prepare("INSERT INTO Categoria_Genero (id_categoria, id_genero) VALUES (?, ?)");
+            foreach ($generosSeleccionados as $idGenero) {
+                $stmtRel->execute([$idCategoria, intval($idGenero)]);
+            }
+        }
+
+        header("Location: categorias.php");
+        exit;
     }
 }
 
@@ -22,9 +68,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar'])) {
     $id = intval($_POST['id_categoria']);
     $nombre = trim($_POST['nombre']);
-    $generos = trim($_POST['generos']);
-    $stmt = $pdo->prepare("UPDATE Categoria SET nombre = ?, generos = ? WHERE id_categoria = ?");
-    $stmt->execute([$nombre, $generos, $id]);
+    $generosSeleccionados = isset($_POST['generos']) ? array_map('intval', $_POST['generos']) : [];
+    $nuevosGenerosTexto = trim($_POST['nuevos_generos'] ?? '');
+
+    if ($nuevosGenerosTexto !== '') {
+        $nuevosIds = obtenerIdsGenerosDesdeTexto($pdo, $nuevosGenerosTexto);
+        $generosSeleccionados = array_unique(array_merge($generosSeleccionados, $nuevosIds), SORT_NUMERIC);
+    }
+
+    if (!empty($nombre)) {
+        $stmt = $pdo->prepare("UPDATE Categoria SET nombre = ? WHERE id_categoria = ?");
+        $stmt->execute([$nombre, $id]);
+
+        $stmtDelete = $pdo->prepare("DELETE FROM Categoria_Genero WHERE id_categoria = ?");
+        $stmtDelete->execute([$id]);
+
+        if (!empty($generosSeleccionados)) {
+            $stmtRel = $pdo->prepare("INSERT INTO Categoria_Genero (id_categoria, id_genero) VALUES (?, ?)");
+            $generosInsertados = [];
+            foreach ($generosSeleccionados as $idGenero) {
+                $idGeneroInt = intval($idGenero);
+                if ($idGeneroInt > 0 && !in_array($idGeneroInt, $generosInsertados, true)) {
+                    $stmtRel->execute([$id, $idGeneroInt]);
+                    $generosInsertados[] = $idGeneroInt;
+                }
+            }
+        }
+
+        header("Location: categorias.php");
+        exit;
+    }
 }
 
 // Eliminar categoría
@@ -36,7 +109,18 @@ if (isset($_GET['eliminar'])) {
     exit;
 }
 
-$categorias = $pdo->query("SELECT * FROM Categoria ORDER BY id_categoria DESC")->fetchAll();
+$generos = $pdo->query("SELECT * FROM Genero ORDER BY nombre")->fetchAll();
+$categorias = $pdo->query(
+    "SELECT c.id_categoria,
+            c.nombre,
+            GROUP_CONCAT(g.id_genero ORDER BY g.nombre) AS generos_ids,
+            GROUP_CONCAT(g.nombre ORDER BY g.nombre SEPARATOR ', ') AS generos
+     FROM Categoria c
+     LEFT JOIN Categoria_Genero cg ON c.id_categoria = cg.id_categoria
+     LEFT JOIN Genero g ON cg.id_genero = g.id_genero
+     GROUP BY c.id_categoria
+     ORDER BY c.id_categoria DESC"
+)->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -88,9 +172,10 @@ $categorias = $pdo->query("SELECT * FROM Categoria ORDER BY id_categoria DESC")-
                         <input type="text" id="nombre" name="nombre" class="form-control" required>
                     </div>
                     <div class="col-12">
-                        <label for="generos" class="form-label">Géneros Relacionados</label>
-                        <input type="text" id="generos" name="generos" class="form-control" placeholder="Separados por comas (Ej. Terror, Suspenso)" required>
+                        <label for="nuevos_generos" class="form-label">Agregar nuevos géneros (separados por comas)</label>
+                        <input type="text" id="nuevos_generos" name="nuevos_generos" class="form-control" placeholder="Ej: Terror, Ciencia ficción">
                     </div>
+                    <!-- La selección de géneros relacionados se gestiona desde libros.php al asignar una categoría a un libro. -->
                     <div class="col-12">
                         <button type="submit" name="crear" id="btn-submit" class="btn btn-primary w-100">Agregar Categoría</button>
                     </div>
@@ -119,7 +204,7 @@ $categorias = $pdo->query("SELECT * FROM Categoria ORDER BY id_categoria DESC")-
                                     <td><?php echo htmlspecialchars($c['nombre']); ?></td>
                                     <td><?php echo htmlspecialchars($c['generos']); ?></td>
                                     <td>
-                                        <button class="btn btn-sm btn-warning" onclick="cargarDatos(<?php echo $c['id_categoria']; ?>, '<?php echo addslashes($c['nombre']); ?>', '<?php echo addslashes($c['generos']); ?>')">Editar</button>
+                                        <button class="btn btn-sm btn-warning" onclick="cargarDatos(<?php echo $c['id_categoria']; ?>, '<?php echo addslashes($c['nombre']); ?>', '<?php echo addslashes($c['generos_ids']); ?>')">Editar</button>
                                         <a href="categorias.php?eliminar=<?php echo $c['id_categoria']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta categoría?')">Eliminar</a>
                                     </td>
                                 </tr>
@@ -132,10 +217,17 @@ $categorias = $pdo->query("SELECT * FROM Categoria ORDER BY id_categoria DESC")-
     </main>
 
     <script>
-        function cargarDatos(id, nombre, generos) {
+        function cargarDatos(id, nombre, generosIds) {
             document.getElementById('id_categoria').value = id;
             document.getElementById('nombre').value = nombre;
-            document.getElementById('generos').value = generos;
+
+            const checkboxes = document.querySelectorAll('input[name="generos[]"]');
+            const ids = generosIds ? generosIds.split(',').map(item => item.trim()) : [];
+
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = ids.includes(checkbox.value);
+            });
+
             document.getElementById('btn-submit').name = 'editar';
             document.getElementById('btn-submit').textContent = 'Guardar Cambios';
         }

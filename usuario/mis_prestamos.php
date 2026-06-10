@@ -13,8 +13,8 @@ $mensaje = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['devolver_id'])) {
     $prestamo_id = intval($_POST['devolver_id']);
-    // El ajuste de existencias lo debe manejar un trigger en la base de datos.
-    // Aquí sólo actualizamos el estado del préstamo a Devuelto.
+    // El stock se gestiona automáticamente por triggers en la base de datos.
+    // Aquí solo actualizamos el estado del préstamo a Devuelto.
     $stmtUpdate = $pdo->prepare("UPDATE Prestamo SET estado_prestamo = 'Devuelto' WHERE id_prestamo = ? AND id_usuario = ?");
     if ($stmtUpdate->execute([$prestamo_id, $id_usuario])) {
         $mensaje = $stmtUpdate->rowCount() > 0
