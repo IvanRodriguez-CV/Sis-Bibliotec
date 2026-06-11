@@ -1,0 +1,353 @@
+.main-content {
+    padding: 2rem 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.btn-volver {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    transition: all 0.3s ease;
+}
+
+.btn-volver:hover {
+    color: var(--color-gold);
+    transform: translateX(-5px);
+}
+
+.book-detail-card {
+    background: linear-gradient(135deg, rgba(15, 34, 52, 0.9) 0%, rgba(26, 52, 80, 0.9) 100%);
+    border: 2px solid rgba(201, 168, 76, 0.3);
+    border-radius: 16px;
+    padding: 3rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.book-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 3rem;
+    align-items: start;
+}
+
+.book-cover-container {
+    position: sticky;
+    top: 2rem;
+}
+
+.book-cover {
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(201, 168, 76, 0.2);
+    transition: transform 0.4s ease;
+}
+
+.book-cover:hover {
+    transform: translateY(-5px);
+}
+
+.book-cover img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.book-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.btn-action {
+    width: 100%;
+    padding: 0.9rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Lora', serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+}
+
+.btn-primary-gold {
+    background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+    color: var(--color-bg-primary);
+}
+
+.btn-primary-gold:hover {
+    background: linear-gradient(135deg, var(--color-gold-light), var(--color-gold-dark));
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(201, 168, 76, 0.3);
+}
+
+.btn-outline-gold {
+    background: transparent;
+    border: 2px solid var(--color-gold);
+    color: var(--color-gold);
+}
+
+.btn-outline-gold:hover {
+    background: rgba(201, 168, 76, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn-disabled {
+    background: rgba(108, 117, 125, 0.5);
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.book-info h1 {
+    font-family: 'Playfair Display', serif;
+    color: var(--color-gold);
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+}
+
+.book-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.meta-item i {
+    color: var(--color-gold);
+}
+
+.author-link {
+    color: #4db8ff;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.author-link:hover {
+    color: var(--color-gold);
+    text-decoration: underline;
+}
+
+.genres-container {
+    margin-bottom: 2rem;
+}
+
+.genres-label {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.genre-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.genre-tag {
+    background: rgba(201, 168, 76, 0.15);
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    color: var(--color-gold);
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.genre-tag:hover {
+    background: rgba(201, 168, 76, 0.25);
+    transform: translateY(-2px);
+}
+
+.description-section {
+    margin-bottom: 2rem;
+}
+
+.section-title {
+    font-family: 'Playfair Display', serif;
+    color: var(--color-gold);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(201, 168, 76, 0.3);
+}
+
+.description-text {
+    color: var(--color-text);
+    font-size: 1.05rem;
+    line-height: 1.8;
+    text-align: justify;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+    padding: 2rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detail-label {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.detail-value {
+    color: var(--color-text);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.alert-custom {
+    background: rgba(201, 168, 76, 0.15);
+    border: 1px solid rgba(201, 168, 76, 0.4);
+    color: var(--color-gold);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.alert-success {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
+    color: #28a745;
+}
+
+@media (max-width: 991.98px) {
+    .book-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .book-cover-container {
+        position: static;
+        max-width: 300px;
+        margin: 0 auto;
+    }
+
+    .book-info h1 {
+        font-size: 1.8rem;
+        text-align: center;
+    }
+
+    .book-meta {
+        justify-content: center;
+    }
+
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   BOTÓN DE RESERVA
+   ============================================ */
+.btn-reserva {
+    background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+    color: #0B1C2B !important;
+}
+
+.btn-reserva:hover {
+    background: linear-gradient(135deg, #ffcd39, #ffc107) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 193, 7, 0.4);
+}
+
+.btn-cancelar {
+    background: transparent !important;
+    border: 2px solid #dc3545 !important;
+    color: #dc3545 !important;
+}
+
+.btn-cancelar:hover {
+    background: rgba(220, 53, 69, 0.1) !important;
+    transform: translateY(-2px);
+}
+
+/* ============================================
+   INFO BOX DE RESERVA
+   ============================================ */
+.reserva-info-box {
+    background: rgba(255, 193, 7, 0.1);
+    border: 2px solid rgba(255, 193, 7, 0.4);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #ffc107;
+}
+
+.reserva-info-box.disponible {
+    background: rgba(92, 184, 92, 0.1);
+    border-color: rgba(92, 184, 92, 0.4);
+    color: #5cb85c;
+    animation: pulse 2s infinite;
+}
+
+.reserva-info-box i {
+    font-size: 2rem;
+}
+
+.reserva-info-box strong {
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.reserva-info-box small {
+    opacity: 0.8;
+    font-size: 0.85rem;
+}
+
+.reserva-contador {
+    text-align: center;
+    padding: 0.75rem;
+    background: rgba(201, 168, 76, 0.1);
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    border-radius: 8px;
+    color: #c9a84c;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}

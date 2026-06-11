@@ -71,9 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear'])) {
             $codigoUnique = $baseCodigo . '_' . $suffix;
         }
 
-        // Insert into Libro; genres stored in Libro_Genero and authors in Libro_Autor
-        $stmt = $pdo->prepare("INSERT INTO Libro (id_categoria, codigo, titulo, editorial, imagen, anio_publicacion, existencias_totales) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$id_categoria, $codigoUnique, $titulo, $editorial, $imagen, $anio, $existencias]);
+        // Insert into Libro con descripción
+        $stmt = $pdo->prepare("INSERT INTO Libro (id_categoria, codigo, titulo, editorial, descripcion, imagen, anio_publicacion, existencias_totales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$id_categoria, $codigoUnique, $titulo, $editorial, $descripcion, $imagen, $anio, $existencias]);
         $newId = $pdo->lastInsertId();
         if (!empty($autor_ids)) {
             $stmt2 = $pdo->prepare("INSERT INTO Libro_Autor (id_libro, id_autor) VALUES (?, ?)");
@@ -121,10 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar'])) {
         }
     }
 
-    // Update Libro and refresh relations
+    // Update Libro con descripción
     if (!empty($codigo) && !empty($titulo) && $id_categoria > 0) {
-        $stmt = $pdo->prepare("UPDATE Libro SET id_categoria = ?, codigo = ?, titulo = ?, editorial = ?, imagen = ?, anio_publicacion = ?, existencias_totales = ? WHERE id_libro = ?");
-        $stmt->execute([$id_categoria, $codigo, $titulo, $editorial, $imagen, $anio, $existencias, $id]);
+        $stmt = $pdo->prepare("UPDATE Libro SET id_categoria = ?, codigo = ?, titulo = ?, editorial = ?, descripcion = ?, imagen = ?, anio_publicacion = ?, existencias_totales = ? WHERE id_libro = ?");
+        $stmt->execute([$id_categoria, $codigo, $titulo, $editorial, $descripcion, $imagen, $anio, $existencias, $id]);
 
         $del = $pdo->prepare("DELETE FROM Libro_Autor WHERE id_libro = ?");
         $del->execute([$id]);
@@ -157,16 +157,21 @@ if (isset($_GET['eliminar'])) {
     header("Location: libros.php");
     exit;
 }
+
+// Consulta modificada para incluir los nombres de los géneros
 $libros = $pdo->query("SELECT L.*, 
     GROUP_CONCAT(DISTINCT CONCAT(A.nombre,' ',A.apellido) SEPARATOR ', ') AS autores, 
     GROUP_CONCAT(DISTINCT A.id_autor) AS autores_ids,
-    GROUP_CONCAT(DISTINCT LG.id_genero) AS generos_ids
+    GROUP_CONCAT(DISTINCT LG.id_genero) AS generos_ids,
+    GROUP_CONCAT(DISTINCT G.nombre SEPARATOR ', ') AS generos_nombres
     FROM Libro L
     LEFT JOIN Libro_Autor LA ON LA.id_libro = L.id_libro
     LEFT JOIN Autores A ON A.id_autor = LA.id_autor
     LEFT JOIN Libro_Genero LG ON LG.id_libro = L.id_libro
+    LEFT JOIN Genero G ON G.id_genero = LG.id_genero
     GROUP BY L.id_libro
     ORDER BY L.id_libro DESC")->fetchAll();
+
 $categorias = $pdo->query("SELECT * FROM Categoria ORDER BY nombre ASC")->fetchAll();
 $autores = $pdo->query("SELECT * FROM Autores")->fetchAll();
 try {
@@ -185,10 +190,10 @@ try {
 <body class="bg-light">
 
     <!-- Navbar igual que dashboard -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+ <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
         <div class="container">
             <a class="navbar-brand fw-bold d-flex align-items-center" href="dashboard.php">
-                ⚙️ <span class="ms-2">Panel Admin</span>
+                 <span class="ms-2">Panel Admin</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -200,6 +205,7 @@ try {
                     <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='libros.php'?'active fw-semibold':'text-white-50'; ?>" href="libros.php">Libros</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='autores.php'?'active fw-semibold':'text-white-50'; ?>" href="autores.php">Autores</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='categorias.php'?'active fw-semibold':'text-white-50'; ?>" href="categorias.php">Categorías</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='reservas.php'?'active fw-semibold':'text-white-50'; ?>" href="reservas.php">Reservas</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='prestamos.php'?'active fw-semibold':'text-white-50'; ?>" href="prestamos.php">Préstamos</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo basename($_SERVER['PHP_SELF'])==='usuarios.php'?'active fw-semibold':'text-white-50'; ?>" href="usuarios.php">Usuarios</a></li>
                     <li class="nav-item">
@@ -316,6 +322,7 @@ try {
                                 <th>Título</th>
                                 <th>Autor</th>
                                 <th>Categoría</th>
+                                <th>Género</th>
                                 <th>Existencias</th>
                                 <th>Acciones</th>
                             </tr>
@@ -325,7 +332,7 @@ try {
                                 <tr>
                                     <td>
                                         <?php $libroImagen = !empty($l['imagen'] ?? '') ? $l['imagen'] : ''; ?>
-                                    <?php if ($libroImagen && file_exists('../' . $libroImagen)): ?>
+                                        <?php if ($libroImagen && file_exists('../' . $libroImagen)): ?>
                                             <img src="../<?php echo htmlspecialchars($libroImagen); ?>" alt="Portada" class="img-thumbnail" style="max-width:50px; max-height:70px;">
                                         <?php else: ?>
                                             <span class="badge bg-secondary">Sin imagen</span>
@@ -335,12 +342,13 @@ try {
                                     <td><?php echo htmlspecialchars($l['titulo']); ?></td>
                                     <td><?php echo htmlspecialchars($l['autores'] ?? ''); ?></td>
                                     <td><?php 
-                                        // Categorías (puede ser lista separada por comas en DB)
+                                        // Categorías
                                         $cat_names = [];
                                         $ids = array_filter(array_map('trim', explode(',', $l['id_categoria'])));
                                         foreach ($categorias as $c) if (in_array($c['id_categoria'], $ids)) $cat_names[] = $c['nombre'];
                                         echo htmlspecialchars(implode(', ', $cat_names));
                                     ?></td>
+                                    <td><?php echo htmlspecialchars($l['generos_nombres'] ?? 'Sin género'); ?></td>
                                     <td><?php echo $l['existencias_totales']; ?></td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-warning" 
