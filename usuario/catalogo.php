@@ -386,7 +386,7 @@ $queryParams = [
 
     <main class="main-content">
         <div class="catalog-header">
-            <div class="ornament">✦ ✦ </div>
+            <div class="ornament">✦ ✦ ✦ </div>
             <h1>La Biblioteca Digital</h1>
             <p>Explora nuestra colección de obras clásicas y académicas</p>
         </div>

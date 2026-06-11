@@ -11,15 +11,17 @@ $id_usuario = $_SESSION['id_usuario'];
 $mensaje = '';
 $tipo_mensaje = 'success';
 
-// Capturar pestaña actual antes de procesar POST
+// Capturar pestaña actual
 $tab = $_POST['current_tab'] ?? $_GET['tab'] ?? 'prestamos';
 
-// Procesar devolución
+// ==========================================
+// PROCESAR DEVOLUCIÓN
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['devolver_id'])) {
     $prestamo_id = intval($_POST['devolver_id']);
     $stmtUpdate = $pdo->prepare("UPDATE Prestamo SET estado_prestamo = 'Devuelto', fecha_devolucion = CURDATE() WHERE id_prestamo = ? AND id_usuario = ?");
     if ($stmtUpdate->execute([$prestamo_id, $id_usuario])) {
-        // Notificar al siguiente en cola si hay reservas
+        // Verificar si hay reservas pendientes para notificar al siguiente en cola
         $stmtLibro = $pdo->prepare("SELECT id_libro FROM Prestamo WHERE id_prestamo = ?");
         $stmtLibro->execute([$prestamo_id]);
         $id_libro = $stmtLibro->fetchColumn();
@@ -43,37 +45,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['devolver_id'])) {
     }
 }
 
-// Procesar renovación de préstamo
+// ==========================================
+// PROCESAR RENOVACIÓN
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['renovar_id'])) {
     $prestamo_id = intval($_POST['renovar_id']);
     
     // Obtener datos del préstamo
-    $stmt = $pdo->prepare("
-        SELECT p.*, l.titulo, l.id_libro 
-        FROM Prestamo p 
-        INNER JOIN Libro l ON p.id_libro = l.id_libro 
-        WHERE p.id_prestamo = ? AND p.id_usuario = ?
-    ");
+    $stmt = $pdo->prepare("SELECT p.*, l.titulo, l.id_libro FROM Prestamo p INNER JOIN Libro l ON p.id_libro = l.id_libro WHERE p.id_prestamo = ? AND p.id_usuario = ?");
     $stmt->execute([$prestamo_id, $id_usuario]);
     $prestamo = $stmt->fetch();
     
     if ($prestamo) {
-        // Validación 1: Verificar que no exceda el máximo de renovaciones
-        if ($prestamo['renovaciones'] >= 2) {
+        $estado_upper = strtoupper($prestamo['estado_prestamo']);
+        $renovaciones = intval($prestamo['renovaciones'] ?? 0);
+        
+        // Validación 1: Máximo 2 renovaciones
+        if ($renovaciones >= 2) {
             $mensaje = 'Este préstamo ya alcanzó el máximo de 2 renovaciones permitidas.';
             $tipo_mensaje = 'warning';
         }
-        // Validación 2: Verificar que el préstamo esté activo o vencido
-        elseif ($prestamo['estado_prestamo'] !== 'Activo' && $prestamo['estado_prestamo'] !== 'Vencido') {
+        // Validación 2: Solo se renuevan préstamos Activos o Vencidos
+        elseif ($estado_upper !== 'ACTIVO' && $estado_upper !== 'VENCIDO') {
             $mensaje = 'Solo se pueden renovar préstamos activos o vencidos.';
             $tipo_mensaje = 'warning';
         }
-        // Validación 3: Verificar que no haya reservas pendientes del mismo libro
+        // Validación 3: Verificar reservas pendientes del mismo libro
         else {
-            $stmtReservas = $pdo->prepare("
-                SELECT COUNT(*) FROM Reserva 
-                WHERE id_libro = ? AND estado IN ('Pendiente', 'Disponible')
-            ");
+            $stmtReservas = $pdo->prepare("SELECT COUNT(*) FROM Reserva WHERE id_libro = ? AND estado IN ('Pendiente', 'Disponible')");
             $stmtReservas->execute([$prestamo['id_libro']]);
             $reservas_pendientes = $stmtReservas->fetchColumn();
             
@@ -81,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['renovar_id'])) {
                 $mensaje = 'No se puede renovar porque hay ' . $reservas_pendientes . ' persona(s) esperando este libro.';
                 $tipo_mensaje = 'warning';
             } else {
-                // Realizar la renovación: agregar 7 días más
+                // Realizar la renovación
                 $stmtRenovar = $pdo->prepare("
                     UPDATE Prestamo 
                     SET fecha_entrega = DATE_ADD(fecha_entrega, INTERVAL 7 DAY),
@@ -93,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['renovar_id'])) {
                 
                 if ($stmtRenovar->execute([$prestamo_id, $id_usuario])) {
                     $nueva_fecha = date('d/m/Y', strtotime($prestamo['fecha_entrega'] . ' +7 days'));
-                    $mensaje = '¡Préstamo renovado exitosamente! Nueva fecha de entrega: ' . $nueva_fecha;
+                    $mensaje = '¡Préstamo renovado! Nueva fecha: ' . $nueva_fecha;
                     $tipo_mensaje = 'success';
                 } else {
                     $mensaje = 'Error al renovar el préstamo.';
@@ -108,7 +107,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['renovar_id'])) {
     $tab = 'prestamos';
 }
 
-// Procesar cancelación de reserva
+// ==========================================
+// PROCESAR CANCELACIÓN DE RESERVA
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['cancelar_reserva_id'])) {
     $reserva_id = intval($_POST['cancelar_reserva_id']);
     $stmtUpdate = $pdo->prepare("UPDATE Reserva SET estado = 'Cancelada' WHERE id_reserva = ? AND id_usuario = ? AND estado IN ('Pendiente', 'Disponible')");
@@ -122,12 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['cancelar_reserva_id'
     $tab = 'reservas';
 }
 
-// Procesar reclamación de reserva
+// ==========================================
+// PROCESAR RECLAMACIÓN DE RESERVA
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['reclamar_reserva_id'])) {
     $reserva_id = intval($_POST['reclamar_reserva_id']);
     $stmtUpdate = $pdo->prepare("UPDATE Reserva SET estado = 'Reclamada' WHERE id_reserva = ? AND id_usuario = ? AND estado = 'Disponible'");
     if ($stmtUpdate->execute([$reserva_id, $id_usuario])) {
-        $mensaje = '¡Reserva reclamada! Ya puedes pasar por tu libro a la biblioteca.';
+        $mensaje = '¡Reserva reclamada! Pasa por la biblioteca a recoger el libro.';
         $tipo_mensaje = 'success';
     } else {
         $mensaje = 'Error al reclamar la reserva.';
@@ -136,15 +139,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['reclamar_reserva_id'
     $tab = 'reservas';
 }
 
-// Obtener préstamos
-$stmt = $pdo->prepare("SELECT p.*, l.titulo, l.codigo FROM Prestamo p 
-                        INNER JOIN Libro l ON p.id_libro = l.id_libro 
-                        WHERE p.id_usuario = ? 
-                        ORDER BY p.fecha_prestamo DESC");
+// ==========================================
+// OBTENER DATOS
+// ==========================================
+
+// Préstamos
+$stmt = $pdo->prepare("SELECT p.*, l.titulo, l.codigo FROM Prestamo p INNER JOIN Libro l ON p.id_libro = l.id_libro WHERE p.id_usuario = ? ORDER BY p.fecha_prestamo DESC");
 $stmt->execute([$id_usuario]);
 $prestamos = $stmt->fetchAll();
 
-// Obtener reservas activas
+// Reservas Activas
 $stmt = $pdo->prepare("
     SELECT r.*, l.titulo, l.codigo, l.imagen,
            (SELECT COUNT(*) FROM Reserva WHERE id_libro = r.id_libro AND estado IN ('Pendiente', 'Disponible') AND posicion_cola < r.posicion_cola) + 1 AS posicion_actual
@@ -156,7 +160,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$id_usuario]);
 $reservas_activas = $stmt->fetchAll();
 
-// Historial de reservas
+// Historial de Reservas
 $stmt = $pdo->prepare("
     SELECT r.*, l.titulo, l.codigo
     FROM Reserva r
@@ -167,14 +171,15 @@ $stmt = $pdo->prepare("
 $stmt->execute([$id_usuario]);
 $reservas_historial = $stmt->fetchAll();
 
-// Calcular estadísticas
+// Estadísticas
 $totalActivos = 0;
 $totalVencidos = 0;
 $totalDevueltos = 0;
 foreach ($prestamos as $p) {
-    if ($p['estado_prestamo'] === 'Activo') $totalActivos++;
-    elseif ($p['estado_prestamo'] === 'Vencido') $totalVencidos++;
-    elseif ($p['estado_prestamo'] === 'Devuelto') $totalDevueltos++;
+    $st = strtoupper($p['estado_prestamo']);
+    if ($st === 'ACTIVO') $totalActivos++;
+    elseif ($st === 'VENCIDO') $totalVencidos++;
+    elseif ($st === 'DEVUELTO') $totalDevueltos++;
 }
 ?>
 <!DOCTYPE html>
@@ -225,7 +230,7 @@ foreach ($prestamos as $p) {
 
     <main class="main-content">
         <div class="page-header">
-            <div class="ornament">✦ ✦ ✦</div>
+            <div class="ornament">✦ ✦ ✦ </div>
             <h1>Mis Préstamos y Reservas</h1>
             <p>Control de tus préstamos y reservas de libros</p>
         </div>
@@ -298,6 +303,7 @@ foreach ($prestamos as $p) {
                         <tbody>
                             <?php foreach ($prestamos as $p): ?>
                                 <?php
+                                    // Normalización de fechas para mostrar
                                     $fecha = strtotime($p['fecha_prestamo']);
                                     $dia = date('d', $fecha);
                                     $mes = date('M', $fecha);
@@ -307,13 +313,19 @@ foreach ($prestamos as $p) {
                                     $diaEnt = date('d', $fechaEntrega);
                                     $mesEnt = date('M', $fechaEntrega);
                                     
+                                    // Normalización de estado para lógica y estilo
+                                    $estadoRaw = $p['estado_prestamo'];
+                                    $estadoUpper = strtoupper($estadoRaw);
+                                    
                                     $claseEstado = '';
-                                    if ($p['estado_prestamo'] === 'Activo') $claseEstado = 'estado-activo';
-                                    elseif ($p['estado_prestamo'] === 'Vencido') $claseEstado = 'estado-vencido';
-                                    elseif ($p['estado_prestamo'] === 'Devuelto') $claseEstado = 'estado-devuelto';
+                                    if ($estadoUpper === 'ACTIVO') $claseEstado = 'estado-activo';
+                                    elseif ($estadoUpper === 'VENCIDO') $claseEstado = 'estado-vencido';
+                                    elseif ($estadoUpper === 'DEVUELTO') $claseEstado = 'estado-devuelto';
                                     
                                     $renovaciones = intval($p['renovaciones'] ?? 0);
                                     $maxRenovaciones = 2;
+                                    // Lógica de renovación corregida
+                                    $puedeRenovar = ($estadoUpper === 'ACTIVO' || $estadoUpper === 'VENCIDO') && ($renovaciones < $maxRenovaciones);
                                 ?>
                                 <tr>
                                     <td data-label="Código">
@@ -342,17 +354,13 @@ foreach ($prestamos as $p) {
                                     </td>
                                     <td data-label="Estado">
                                         <span class="estado-badge <?php echo $claseEstado; ?>">
-                                            <?php echo $p['estado_prestamo']; ?>
+                                            <?php echo ucfirst(strtolower($estadoRaw)); ?>
                                         </span>
                                     </td>
                                     <td data-label="Acción">
-                                        <?php if ($p['estado_prestamo'] === 'Activo' || $p['estado_prestamo'] === 'Vencido'): ?>
+                                        <!-- Aquí está la corrección: ahora mostrará botones si es ACTIVO o VENCIDO -->
+                                        <?php if ($estadoUpper === 'ACTIVO' || $estadoUpper === 'VENCIDO'): ?>
                                             <div class="acciones-container">
-                                                <?php 
-                                                // Puede renovar si está activo o vencido, y no ha llegado al máximo
-                                                $puedeRenovar = ($renovaciones < $maxRenovaciones);
-                                                ?>
-                                                
                                                 <?php if ($puedeRenovar): ?>
                                                     <form method="post" class="d-inline">
                                                         <input type="hidden" name="current_tab" value="prestamos">
@@ -388,7 +396,7 @@ foreach ($prestamos as $p) {
                 </div>
             <?php else: ?>
                 <div class="estado-vacio">
-                    <div class="icono">📚</div>
+                    <div class="icono"></div>
                     <h3>Sin préstamos registrados</h3>
                     <p>Aún no has solicitado ningún libro en préstamo</p>
                     <a href="./catalogo.php" class="btn-explorar">Explorar Catálogo</a>
@@ -401,7 +409,7 @@ foreach ($prestamos as $p) {
                 <div class="reservas-grid">
                     <?php foreach ($reservas_activas as $r): ?>
                         <?php
-                            $esDisponible = $r['estado'] === 'Disponible';
+                            $esDisponible = strtoupper($r['estado']) === 'DISPONIBLE';
                             $diasRestantes = 0;
                             if ($esDisponible && !empty($r['fecha_expiracion'])) {
                                 $diasRestantes = max(0, ceil((strtotime($r['fecha_expiracion']) - time()) / 86400));
@@ -410,7 +418,7 @@ foreach ($prestamos as $p) {
                         <div class="reserva-card <?php echo $esDisponible ? 'disponible' : 'pendiente'; ?>">
                             <div class="reserva-header">
                                 <div class="reserva-icono">
-                                    <?php echo $esDisponible ? '🔔' : '⏳'; ?>
+                                    <?php echo $esDisponible ? '' : '⏳'; ?>
                                 </div>
                                 <div class="reserva-info">
                                     <span class="codigo-badge"><?php echo htmlspecialchars($r['codigo']); ?></span>
@@ -492,18 +500,11 @@ foreach ($prestamos as $p) {
                                 <?php
                                     $claseEstado = '';
                                     $iconoEstado = '';
-                                    if ($r['estado'] === 'Cancelada') {
-                                        $claseEstado = 'estado-cancelada';
-                                        $iconoEstado = '<i class="fas fa-times-circle"></i> ';
-                                    }
-                                    elseif ($r['estado'] === 'Expirada') {
-                                        $claseEstado = 'estado-expirada';
-                                        $iconoEstado = '<i class="fas fa-clock"></i> ';
-                                    }
-                                    elseif ($r['estado'] === 'Reclamada') {
-                                        $claseEstado = 'estado-reclamada';
-                                        $iconoEstado = '<i class="fas fa-check-circle"></i> ';
-                                    }
+                                    $st = strtoupper($r['estado']);
+                                    
+                                    if ($st === 'CANCELADA') { $claseEstado = 'estado-cancelada'; $iconoEstado = '<i class="fas fa-times-circle"></i> '; }
+                                    elseif ($st === 'EXPIRADA') { $claseEstado = 'estado-expirada'; $iconoEstado = '<i class="fas fa-clock"></i> '; }
+                                    elseif ($st === 'RECLAMADA') { $claseEstado = 'estado-reclamada'; $iconoEstado = '<i class="fas fa-check-circle"></i> '; }
                                 ?>
                                 <tr>
                                     <td data-label="Código">
@@ -520,7 +521,7 @@ foreach ($prestamos as $p) {
                                     <td data-label="Estado">
                                         <span class="estado-badge <?php echo $claseEstado; ?>">
                                             <?php echo $iconoEstado; ?>
-                                            <?php echo $r['estado']; ?>
+                                            <?php echo ucfirst(strtolower($r['estado'])); ?>
                                         </span>
                                     </td>
                                 </tr>

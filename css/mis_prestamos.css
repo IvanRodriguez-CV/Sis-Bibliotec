@@ -51,6 +51,24 @@
     animation: fadeIn 0.5s ease;
 }
 
+.alert-custom.alert-warning {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.4);
+    color: #ffc107;
+}
+
+.alert-custom.alert-danger {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #dc3545;
+}
+
+.alert-custom.alert-success {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
+    color: #5cb85c;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -60,12 +78,12 @@
     filter: invert(0.7) sepia(1) saturate(3) hue-rotate(10deg);
 }
 
-/* ===== TABLA ===== */
+/* ===== TABLA - MODIFICADA PARA MOSTRAR ACCIONES ===== */
 .tabla-container {
     background: linear-gradient(135deg, rgba(15, 34, 52, 0.9) 0%, rgba(26, 52, 80, 0.9) 100%);
     border: 2px solid rgba(201, 168, 76, 0.3);
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto; /* ← CAMBIO: permite scroll horizontal */
     box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     animation: fadeInUp 0.6s ease;
 }
@@ -77,6 +95,7 @@
 
 .tabla-prestamos {
     width: 100%;
+    min-width: 950px; /* ← NUEVO: ancho mínimo para que no se comprima */
     border-collapse: collapse;
     font-family: 'Lora', serif;
 }
@@ -87,10 +106,10 @@
 }
 
 .tabla-prestamos thead th {
-    padding: 1.25rem 1.5rem;
+    padding: 1rem 0.75rem; /* ← REDUCIDO para que quepa todo */
     color: var(--color-gold);
     font-family: 'Playfair Display', serif;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -113,9 +132,9 @@
 }
 
 .tabla-prestamos tbody td {
-    padding: 1.25rem 1.5rem;
+    padding: 1rem 0.75rem; /* ← REDUCIDO para que quepa todo */
     color: var(--color-text);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     vertical-align: middle;
 }
 
@@ -134,28 +153,35 @@
 .titulo-libro {
     color: #e8d9b4;
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    max-width: 180px; /* ← NUEVO: limita el ancho */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
 }
 
 .fecha-prestamo {
     color: var(--color-text-muted);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 .fecha-prestamo .dia {
     color: var(--color-gold);
     font-weight: 600;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .estado-badge {
     display: inline-block;
-    padding: 0.4rem 1rem;
+    padding: 0.4rem 0.8rem;
     border-radius: 20px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .estado-activo {
@@ -182,18 +208,52 @@
     border: 1px solid rgba(108, 117, 125, 0.4);
 }
 
+/* ===== BOTONES DE ACCIÓN ===== */
+.acciones-container {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.btn-renovar {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    border: none;
+    color: #fff;
+    padding: 0.5rem 0.9rem;
+    border-radius: 6px;
+    font-family: 'Lora', serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.btn-renovar:hover {
+    background: linear-gradient(135deg, #1fc8e3, #17a2b8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+}
+
 .btn-devolver {
     background: transparent;
     border: 1px solid #5cb85c;
     color: #5cb85c;
-    padding: 0.5rem 1.25rem;
+    padding: 0.5rem 0.9rem;
     border-radius: 6px;
     font-family: 'Lora', serif;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
 }
 
 .btn-devolver:hover {
@@ -203,10 +263,53 @@
     box-shadow: 0 4px 12px rgba(92, 184, 92, 0.3);
 }
 
+.texto-renovacion-max {
+    color: #dc3545;
+    font-size: 0.7rem;
+    font-style: italic;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+
 .texto-devuelto {
     color: #6b7d8a;
     font-style: italic;
     font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* ===== INDICADOR DE RENOVACIONES ===== */
+.renovaciones-indicador {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.renovacion-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.renovacion-dot.used {
+    background: linear-gradient(135deg, #c9a84c, #a8893c);
+    box-shadow: 0 0 6px rgba(201, 168, 76, 0.5);
+}
+
+.renovacion-dot.available {
+    background: rgba(201, 168, 76, 0.2);
+    border: 1px solid rgba(201, 168, 76, 0.4);
+}
+
+.renovaciones-indicador small {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 /* ===== ESTADO VACÍO ===== */
@@ -302,9 +405,7 @@
 .stat-card.vencidos .stat-numero { color: #e74c3c; }
 .stat-card.devueltos .stat-numero { color: var(--color-text-muted); }
 
-/* ============================================
-   TABS DE NAVEGACIÓN - MEJORADOS
-   ============================================ */
+/* ===== TABS DE NAVEGACIÓN ===== */
 .tabs-container {
     display: flex;
     gap: 0;
@@ -404,9 +505,7 @@
     }
 }
 
-/* ============================================
-   BADGE EN SIDEBAR
-   ============================================ */
+/* ===== BADGE EN SIDEBAR ===== */
 .badge-reserva {
     background: linear-gradient(135deg, #c9a84c, #a8893c);
     color: #0B1C2B;
@@ -425,9 +524,7 @@
     50% { transform: scale(1.1); }
 }
 
-/* ============================================
-   GRID DE RESERVAS
-   ============================================ */
+/* ===== GRID DE RESERVAS ===== */
 .reservas-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -479,11 +576,6 @@
     background: rgba(92, 184, 92, 0.15);
     border-color: rgba(92, 184, 92, 0.4);
     animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(92, 184, 92, 0.4); }
-    50% { box-shadow: 0 0 0 10px rgba(92, 184, 92, 0); }
 }
 
 .reserva-info h3 {
@@ -646,8 +738,8 @@
 
     .tabla-prestamos thead th,
     .tabla-prestamos tbody td {
-        padding: 1rem;
-        font-size: 0.85rem;
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8rem;
     }
 
     .stats-container {
@@ -669,57 +761,16 @@
 }
 
 @media (max-width: 767.98px) {
-    .tabla-prestamos thead {
-        display: none;
-    }
-
-    .tabla-prestamos, 
-    .tabla-prestamos tbody, 
-    .tabla-prestamos tr, 
-    .tabla-prestamos td {
-        display: block;
-        width: 100%;
-    }
-
-    .tabla-prestamos tbody tr {
-        background: rgba(15, 34, 52, 0.6);
-        border: 1px solid rgba(201, 168, 76, 0.2);
-        border-radius: 10px;
-        margin-bottom: 1rem;
-        padding: 1rem;
-    }
-
-    .tabla-prestamos tbody tr:hover {
-        transform: none;
-        background: rgba(201, 168, 76, 0.05);
-    }
-
-    .tabla-prestamos tbody td {
-        padding: 0.5rem 0;
-        text-align: left;
-        border: none;
-        position: relative;
-        padding-left: 45%;
-    }
-
-    .tabla-prestamos tbody td::before {
-        content: attr(data-label);
-        position: absolute;
-        left: 0;
-        width: 40%;
-        color: var(--color-gold);
-        font-weight: 600;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
+    /* En móvil, la tabla tendrá scroll horizontal */
     .tabla-container {
-        background: transparent;
-        border: none;
-        box-shadow: none;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
-
+    
+    .tabla-prestamos {
+        min-width: 800px;
+    }
+    
     .tabs-container {
         flex-direction: column;
     }
@@ -755,6 +806,17 @@
         width: 100%;
         justify-content: center;
     }
+    
+    .acciones-container {
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    
+    .btn-renovar,
+    .btn-devolver {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -764,100 +826,5 @@
 
     .stats-container {
         grid-template-columns: 1fr;
-    }
-}
-
-/* ============================================
-   RENOVACIÓN DE PRÉSTAMOS
-   ============================================ */
-.renovaciones-indicador {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.renovacion-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-    transition: all 0.3s ease;
-}
-
-.renovacion-dot.used {
-    background: linear-gradient(135deg, #c9a84c, #a8893c);
-    box-shadow: 0 0 6px rgba(201, 168, 76, 0.5);
-}
-
-.renovacion-dot.available {
-    background: rgba(201, 168, 76, 0.2);
-    border: 1px solid rgba(201, 168, 76, 0.4);
-}
-
-.renovaciones-indicador small {
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.acciones-container {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.btn-renovar {
-    background: linear-gradient(135deg, #17a2b8, #138496);
-    border: none;
-    color: #fff;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-family: 'Lora', serif;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.btn-renovar:hover {
-    background: linear-gradient(135deg, #1fc8e3, #17a2b8);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
-}
-
-.texto-renovacion-max {
-    color: #dc3545;
-    font-size: 0.75rem;
-    font-style: italic;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.alert-warning {
-    background: rgba(255, 193, 7, 0.15);
-    border-color: rgba(255, 193, 7, 0.4);
-    color: #ffc107;
-}
-
-.alert-danger {
-    background: rgba(220, 53, 69, 0.15);
-    border-color: rgba(220, 53, 69, 0.4);
-    color: #dc3545;
-}
-
-/* Responsive para acciones */
-@media (max-width: 767.98px) {
-    .acciones-container {
-        flex-direction: column;
-    }
-    
-    .btn-renovar,
-    .btn-devolver {
-        width: 100%;
-        justify-content: center;
     }
 }
