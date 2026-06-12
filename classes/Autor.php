@@ -9,18 +9,18 @@ class Autor {
         $this->pdo = $conexion->pdo;
     }
 
-    public function crear($nombre, $apellido, $anio, $genero) {
-        $stmt = $this->pdo->prepare("INSERT INTO Autores (nombre, apellido, anio_nacimiento, genero) VALUES (?, ?, ?, ?)");
-        return $stmt->execute([$nombre, $apellido, $anio, $genero]);
+    public function crear($codigoAutor, $nombre, $apellido, $anioNacimiento, $generoFrecuente) {
+        $stmt = $this->pdo->prepare("INSERT INTO Autores (codigo_autor, nombre, apellido, anio_nacimiento, genero_frecuente) VALUES (?, ?, ?, ?, ?)");
+        return $stmt->execute([$codigoAutor, $nombre, $apellido, $anioNacimiento, $generoFrecuente]);
     }
 
     public function listar() {
         return $this->pdo->query("SELECT * FROM Autores ORDER BY id_autor DESC")->fetchAll();
     }
 
-    public function editar($id, $nombre, $apellido, $anio, $genero) {
-        $stmt = $this->pdo->prepare("UPDATE Autores SET nombre=?, apellido=?, anio_nacimiento=?, genero=? WHERE id_autor=?");
-        return $stmt->execute([$nombre, $apellido, $anio, $genero, $id]);
+    public function editar($id, $codigoAutor, $nombre, $apellido, $anioNacimiento, $generoFrecuente) {
+        $stmt = $this->pdo->prepare("UPDATE Autores SET codigo_autor=?, nombre=?, apellido=?, anio_nacimiento=?, genero_frecuente=? WHERE id_autor=?");
+        return $stmt->execute([$codigoAutor, $nombre, $apellido, $anioNacimiento, $generoFrecuente, $id]);
     }
 
     public function eliminar($id) {

@@ -9,10 +9,10 @@ class Usuario {
         $this->pdo = $conexion->pdo;
     }
 
-    public function crear($id_carrera, $carnet, $nombre, $correo, $contrasenia, $tipo) {
+    public function crear($id_carrera, $carnet, $nombre, $telefono, $correo, $contrasenia, $tipo) {
         $hash = password_hash($contrasenia, PASSWORD_BCRYPT);
-        $stmt = $this->pdo->prepare("INSERT INTO Usuario (id_carrera, carnet_codigo, nombre_completo, correo, contrasenia, tipo_usuario, edad) VALUES (?, ?, ?, ?, ?, ?, 18)");
-        return $stmt->execute([$id_carrera, $carnet, $nombre, $correo, $hash, $tipo]);
+        $stmt = $this->pdo->prepare("INSERT INTO Usuario (id_carrera, carnet_codigo, nombre_completo, telefono, correo, contrasenia, tipo_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        return $stmt->execute([$id_carrera, $carnet, $nombre, $telefono, $correo, $hash, $tipo]);
     }
 
     public function listar() {
@@ -22,9 +22,9 @@ class Usuario {
                                   ORDER BY u.id_usuario DESC")->fetchAll();
     }
 
-    public function editar($id, $id_carrera, $nombre, $correo, $tipo) {
-        $stmt = $this->pdo->prepare("UPDATE Usuario SET id_carrera=?, nombre_completo=?, correo=?, tipo_usuario=? WHERE id_usuario=?");
-        return $stmt->execute([$id_carrera, $nombre, $correo, $tipo, $id]);
+    public function editar($id, $id_carrera, $nombre, $telefono, $correo, $tipo) {
+        $stmt = $this->pdo->prepare("UPDATE Usuario SET id_carrera=?, nombre_completo=?, telefono=?, correo=?, tipo_usuario=? WHERE id_usuario=?");
+        return $stmt->execute([$id_carrera, $nombre, $telefono, $correo, $tipo, $id]);
     }
 
     public function eliminar($id) {
