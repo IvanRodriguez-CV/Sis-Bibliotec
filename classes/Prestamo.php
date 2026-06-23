@@ -9,20 +9,23 @@ class Prestamo {
         $this->pdo = $conexion->pdo;
     }
 
-    public function crear($id_usuario, $id_libro, $fecha_prestamo = null, $fecha_entrega) {
+    // El admin crea el préstamo para un usuario
+    public function crear($id_admin, $id_usuario, $id_libro, $fecha_prestamo = null, $fecha_entrega) {
         if ($fecha_prestamo === null) {
             $fecha_prestamo = date('Y-m-d');
         }
 
-        $stmt = $this->pdo->prepare("INSERT INTO Prestamo (id_usuario, id_libro, fecha_prestamo, fecha_entrega, estado_prestamo) VALUES (?, ?, ?, ?, 'Activo')");
-        return $stmt->execute([$id_usuario, $id_libro, $fecha_prestamo, $fecha_entrega]);
+        $stmt = $this->pdo->prepare("INSERT INTO Prestamo (id_admin, id_usuario, id_libro, fecha_prestamo, fecha_entrega, estado_prestamo) VALUES (?, ?, ?, ?, ?, 'Activo')");
+        return $stmt->execute([$id_admin, $id_usuario, $id_libro, $fecha_prestamo, $fecha_entrega]);
     }
 
     public function listar() {
-        return $this->pdo->query("SELECT p.*, l.titulo AS libro_titulo, u.nombre_completo AS usuario_nombre, u.carnet_codigo
+        return $this->pdo->query("SELECT p.*, l.titulo AS libro_titulo, u.nombre_completo AS usuario_nombre, u.carnet_codigo,
+                                  a.nombre_completo AS admin_nombre
                                   FROM Prestamo p
                                   JOIN Libro l ON p.id_libro = l.id_libro
                                   JOIN Usuario u ON p.id_usuario = u.id_usuario
+                                  LEFT JOIN Usuario a ON p.id_admin = a.id_usuario
                                   ORDER BY p.id_prestamo DESC")->fetchAll();
     }
 

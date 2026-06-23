@@ -101,13 +101,10 @@ CREATE TABLE Prestamo (
   fecha_entrega DATE NOT NULL,
   fecha_devolucion DATE NULL,
   estado_prestamo ENUM('Activo','Devuelto','Vencido','Perdido') NOT NULL DEFAULT 'Activo',
-  renovaciones INT NOT NULL DEFAULT 0,
-  fecha_renovacion DATE NULL,
   FOREIGN KEY (id_libro) REFERENCES Libro(id_libro)
     ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY (id_usuario) REFERENCES Usuario(id_usuario)
-    ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT chk_renovaciones CHECK (renovaciones <= 2)
+    ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=INNODB;
 
 -- Tabla de Reservas
@@ -151,3 +148,6 @@ BEGIN
   END IF;
 END$$
 DELIMITER ;
+
+ALTER TABLE Prestamo DROP COLUMN renovaciones;
+ALTER TABLE Prestamo DROP COLUMN fecha_renovacion;

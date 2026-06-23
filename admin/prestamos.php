@@ -11,6 +11,75 @@ if (!isset($_SESSION['id_usuario']) || $_SESSION['tipo_usuario'] !== 'admin') {
 $error = isset($_GET['error']) ? trim($_GET['error']) : '';
 $mensaje = isset($_GET['mensaje']) ? trim($_GET['mensaje']) : '';
 
+// ============================================
+// PROCESAR CREACIÓN DE PRÉSTAMO
+// ============================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear_prestamo'])) {
+    $id_usuario = intval($_POST['id_usuario']);
+    $id_libro = intval($_POST['id_libro']);
+    $fecha_entrega = $_POST['fecha_entrega'];
+    $fecha_prestamo = !empty($_POST['fecha_prestamo']) ? $_POST['fecha_prestamo'] : date('Y-m-d');
+    
+    try {
+        // Verificar que el libro exista y tenga existencias
+        $stmtLibro = $pdo->prepare("SELECT id_libro, titulo, existencias_totales FROM Libro WHERE id_libro = ?");
+        $stmtLibro->execute([$id_libro]);
+        $libro = $stmtLibro->fetch();
+        
+        if (!$libro) {
+            throw new Exception("El libro no existe.");
+        }
+        
+        if ($libro['existencias_totales'] <= 0) {
+            throw new Exception("No hay existencias disponibles de este libro.");
+        }
+        
+        // Verificar que el usuario exista
+        $stmtUser = $pdo->prepare("SELECT id_usuario FROM Usuario WHERE id_usuario = ?");
+        $stmtUser->execute([$id_usuario]);
+        if (!$stmtUser->fetch()) {
+            throw new Exception("El usuario no existe.");
+        }
+        
+        // Verificar que el usuario no tenga préstamos vencidos
+        $stmtVencidos = $pdo->prepare("SELECT COUNT(*) FROM Prestamo WHERE id_usuario = ? AND estado_prestamo = 'Vencido'");
+        $stmtVencidos->execute([$id_usuario]);
+        if ($stmtVencidos->fetchColumn() > 0) {
+            throw new Exception("El usuario tiene préstamos vencidos. No se puede crear nuevo préstamo.");
+        }
+        
+        // Iniciar transacción
+        $pdo->beginTransaction();
+        
+        // Crear préstamo
+        $stmt = $pdo->prepare("INSERT INTO Prestamo (id_usuario, id_libro, fecha_prestamo, fecha_entrega, estado_prestamo) VALUES (?, ?, ?, ?, 'Activo')");
+        $stmt->execute([$id_usuario, $id_libro, $fecha_prestamo, $fecha_entrega]);
+        
+        // Descontar existencia
+        $stmtDesc = $pdo->prepare("UPDATE Libro SET existencias_totales = existencias_totales - 1 WHERE id_libro = ? AND existencias_totales > 0");
+        $stmtDesc->execute([$id_libro]);
+        
+        // Si existencias llegan a 0, cambiar estado del libro
+        $stmtEstado = $pdo->prepare("UPDATE Libro SET estado = 'Prestado' WHERE id_libro = ? AND existencias_totales = 0");
+        $stmtEstado->execute([$id_libro]);
+        
+        $pdo->commit();
+        $mensaje = 'Préstamo creado exitosamente.';
+        
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $error = $e->getMessage();
+    }
+    
+    $redirectUrl = 'prestamos.php';
+    if (!empty($mensaje)) $redirectUrl .= '?mensaje=' . urlencode($mensaje);
+    if (!empty($error)) $redirectUrl .= '?error=' . urlencode($error);
+    header("Location: $redirectUrl");
+    exit;
+}
+
 // Procesar cambio de estado de préstamo
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cambiar_estado'])) {
     $id = intval($_POST['id_prestamo']);
@@ -45,22 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cambiar_estado'])) {
         }
     }
     
-    $redirectUrl = 'prestamos.php';
-    if (!empty($mensaje)) $redirectUrl .= '?mensaje=' . urlencode($mensaje);
-    if (!empty($error)) $redirectUrl .= '?error=' . urlencode($error);
-    header("Location: $redirectUrl");
-    exit;
-}
-
-// Procesar reseteo de renovaciones
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_renovaciones'])) {
-    $id = intval($_POST['id_prestamo']);
-    $stmt = $pdo->prepare("UPDATE Prestamo SET renovaciones = 0, fecha_renovacion = NULL WHERE id_prestamo = ?");
-    if ($stmt->execute([$id])) {
-        $mensaje = 'Renovaciones reseteadas correctamente.';
-    } else {
-        $error = 'Error al resetear renovaciones.';
-    }
     $redirectUrl = 'prestamos.php';
     if (!empty($mensaje)) $redirectUrl .= '?mensaje=' . urlencode($mensaje);
     if (!empty($error)) $redirectUrl .= '?error=' . urlencode($error);
@@ -150,6 +203,10 @@ foreach ($prestamos as $p) {
     elseif ($st === 'DEVUELTO') $stats['devueltos']++;
     elseif ($st === 'PERDIDO') $stats['perdidos']++;
 }
+
+// Cargar usuarios y libros para el formulario de crear préstamo
+$usuarios = $pdo->query("SELECT id_usuario, nombre_completo, carnet_codigo FROM Usuario ORDER BY nombre_completo")->fetchAll();
+$libros = $pdo->query("SELECT id_libro, titulo, codigo, existencias_totales FROM Libro WHERE existencias_totales > 0 ORDER BY titulo")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -256,6 +313,12 @@ foreach ($prestamos as $p) {
             background: #17a2b8;
             border: none;
             color: white;
+            font-weight: 600;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            border: none;
             font-weight: 600;
         }
         
@@ -371,41 +434,6 @@ foreach ($prestamos as $p) {
             font-size: 1.1rem;
         }
         
-        .renovaciones-container {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .renovacion-dot {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
-        
-        .renovacion-dot.used {
-            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
-            color: #000;
-            box-shadow: 0 2px 5px rgba(255, 193, 7, 0.4);
-        }
-        
-        .renovacion-dot.available {
-            background: #f8f9fa;
-            color: #6c757d;
-            border: 2px solid #dee2e6;
-        }
-        
-        .renovaciones-text {
-            font-size: 0.8rem;
-            color: #6c757d;
-            font-weight: 600;
-        }
-        
         .modal-content {
             border-radius: 15px;
             border: none;
@@ -459,17 +487,6 @@ foreach ($prestamos as $p) {
             font-weight: 600;
             color: #495057;
             font-size: 1rem;
-        }
-        
-        .badge-renovacion-info {
-            background: rgba(23, 162, 184, 0.15);
-            color: #0c5460;
-            padding: 0.3rem 0.6rem;
-            border-radius: 15px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-top: 0.3rem;
-            display: inline-block;
         }
     </style>
 </head>
@@ -528,11 +545,15 @@ foreach ($prestamos as $p) {
                     <h2><i class="fas fa-hand-holding me-2"></i>Gestión de Préstamos</h2>
                     <p class="mb-0 mt-2 opacity-75">Administra los préstamos de libros de la biblioteca</p>
                 </div>
-                <div>
+                <div class="d-flex gap-2 align-items-center">
                     <span class="badge bg-light text-dark fs-6 px-3 py-2">
                         <i class="fas fa-info-circle me-2"></i>
                         Total: <?php echo $stats['total']; ?> préstamos
                     </span>
+                    <!-- BOTÓN NUEVO PRÉSTAMO -->
+                    <button class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#modalCrearPrestamo">
+                        <i class="fas fa-plus me-2"></i>Nuevo Préstamo
+                    </button>
                 </div>
             </div>
         </div>
@@ -653,7 +674,6 @@ foreach ($prestamos as $p) {
                                     <th>Libro</th>
                                     <th>Usuario</th>
                                     <th>Fechas</th>
-                                    <th class="text-center">Renovaciones</th>
                                     <th class="text-center">Estado</th>
                                     <th class="text-center">Acciones</th>
                                 </tr>
@@ -678,9 +698,6 @@ foreach ($prestamos as $p) {
                                             case 'DEVUELTO': $iconoEstado = 'fa-undo'; break;
                                             case 'PERDIDO': $iconoEstado = 'fa-times-circle'; break;
                                         }
-                                        
-                                        $renovaciones = intval($p['renovaciones'] ?? 0);
-                                        $maxRenovaciones = 2;
                                     ?>
                                     <tr>
                                         <td class="ps-4">
@@ -721,25 +738,6 @@ foreach ($prestamos as $p) {
                                                     <i class="fas fa-calendar-check me-1"></i>Entrega:
                                                 </small>
                                                 <span class="dia"><?php echo $diaE; ?></span> <?php echo $mesE; ?>
-                                                <?php if (!empty($p['fecha_renovacion'])): ?>
-                                                    <br>
-                                                    <span class="badge-renovacion-info">
-                                                        <i class="fas fa-sync-alt me-1"></i>
-                                                        Renovado: <?php echo date('d/m/Y', strtotime($p['fecha_renovacion'])); ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="renovaciones-container justify-content-center">
-                                                <?php for ($i = 0; $i < $maxRenovaciones; $i++): ?>
-                                                    <span class="renovacion-dot <?php echo $i < $renovaciones ? 'used' : 'available'; ?>">
-                                                        <?php echo $i < $renovaciones ? '●' : '○'; ?>
-                                                    </span>
-                                                <?php endfor; ?>
-                                                <span class="renovaciones-text">
-                                                    <?php echo $renovaciones; ?>/<?php echo $maxRenovaciones; ?>
-                                                </span>
                                             </div>
                                         </td>
                                         <td class="text-center">
@@ -754,17 +752,6 @@ foreach ($prestamos as $p) {
                                                     title="Editar estado">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            
-                                            <?php if ($renovaciones > 0): ?>
-                                                <form method="POST" style="display: inline;">
-                                                    <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">
-                                                    <button type="submit" name="reset_renovaciones" class="btn btn-sm btn-info me-1" 
-                                                            onclick="return confirm('¿Resetear renovaciones a 0?')"
-                                                            title="Resetear renovaciones">
-                                                        <i class="fas fa-undo"></i>
-                                                    </button>
-                                                </form>
-                                            <?php endif; ?>
                                             
                                             <?php if (strtoupper($p['estado_prestamo']) === 'DEVUELTO'): ?>
                                                 <a href="prestamos.php?eliminar=<?php echo $p['id_prestamo']; ?>" 
@@ -790,6 +777,82 @@ foreach ($prestamos as $p) {
             </div>
         </div>
     </main>
+
+    <!-- ============================================ -->
+    <!-- MODAL PARA CREAR NUEVO PRÉSTAMO -->
+    <!-- ============================================ -->
+    <div class="modal fade" id="modalCrearPrestamo" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle me-2"></i>Crear Nuevo Préstamo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="prestamos.php" method="POST">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-user me-2"></i>Usuario
+                                </label>
+                                <select name="id_usuario" class="form-select form-select-lg" required>
+                                    <option value="">-- Seleccionar usuario --</option>
+                                    <?php foreach ($usuarios as $u): ?>
+                                        <option value="<?php echo $u['id_usuario']; ?>">
+                                            <?php echo htmlspecialchars($u['nombre_completo']); ?> (<?php echo htmlspecialchars($u['carnet_codigo']); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-book me-2"></i>Libro
+                                </label>
+                                <select name="id_libro" class="form-select form-select-lg" required>
+                                    <option value="">-- Seleccionar libro --</option>
+                                    <?php foreach ($libros as $l): ?>
+                                        <option value="<?php echo $l['id_libro']; ?>">
+                                            <?php echo htmlspecialchars($l['titulo']); ?> (<?php echo htmlspecialchars($l['codigo']); ?>) - Disp: <?php echo $l['existencias_totales']; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Solo se muestran libros con existencias disponibles.
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-calendar-plus me-2"></i>Fecha de Préstamo
+                                </label>
+                                <input type="date" name="fecha_prestamo" class="form-control form-control-lg" 
+                                       value="<?php echo date('Y-m-d'); ?>" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-calendar-check me-2"></i>Fecha de Entrega
+                                </label>
+                                <input type="date" name="fecha_entrega" class="form-control form-control-lg" 
+                                       value="<?php echo date('Y-m-d', strtotime('+14 days')); ?>" required>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Al crear el préstamo, se descontará automáticamente 1 unidad de las existencias del libro.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" name="crear_prestamo" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Crear Préstamo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal para editar -->
     <div class="modal fade" id="modalEditar" tabindex="-1">
@@ -828,14 +891,6 @@ foreach ($prestamos as $p) {
                                         <i class="fas fa-calendar me-1"></i>Fechas
                                     </div>
                                     <div class="info-box-value" id="edit_fechas"></div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="info-box">
-                                    <div class="info-box-label">
-                                        <i class="fas fa-sync-alt me-1"></i>Renovaciones
-                                    </div>
-                                    <div class="info-box-value" id="edit_renovaciones"></div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -889,9 +944,6 @@ foreach ($prestamos as $p) {
             });
             
             document.getElementById('edit_fechas').textContent = 'Préstamo: ' + fechaPrestamoFormateada + ' | Entrega: ' + fechaEntregaFormateada;
-            
-            const renovaciones = prestamo.renovaciones || 0;
-            document.getElementById('edit_renovaciones').textContent = renovaciones + ' de 2 renovaciones usadas';
             
             document.getElementById('estado').value = prestamo.estado_prestamo;
             
